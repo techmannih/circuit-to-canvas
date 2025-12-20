@@ -12,6 +12,12 @@ import { drawRect } from "../shapes/rect"
 import { drawCircle } from "../shapes/circle"
 import { drawLine } from "../shapes/line"
 import { drawPath } from "../shapes/path"
+import {
+  getAlphabetLayout,
+  strokeAlphabetText,
+  getTextStartPosition,
+  type AnchorAlignment,
+} from "../shapes/text"
 
 export interface DrawPcbSilkscreenTextParams {
   ctx: CanvasContext
@@ -54,13 +60,9 @@ function layerToSilkscreenColor(layer: string, colorMap: PcbColorMap): string {
     : colorMap.silkscreen.top
 }
 
-function mapAnchorAlignment(
-  alignment?: string,
-): "start" | "end" | "left" | "right" | "center" {
+function mapAnchorAlignment(alignment?: string): AnchorAlignment {
   if (!alignment) return "center"
-  if (alignment.includes("left")) return "left"
-  if (alignment.includes("right")) return "right"
-  return "center"
+  return alignment as AnchorAlignment
 }
 
 export function drawPcbSilkscreenText(
@@ -68,14 +70,21 @@ export function drawPcbSilkscreenText(
 ): void {
   const { ctx, text, realToCanvasMat, colorMap } = params
 
+  const content = text.text ?? ""
+  if (!content) return
+
   const color = layerToSilkscreenColor(text.layer, colorMap)
   const [x, y] = applyToPoint(realToCanvasMat, [
     text.anchor_position.x,
     text.anchor_position.y,
   ])
-
-  const fontSize = (text.font_size ?? 1) * Math.abs(realToCanvasMat.a)
+  const scale = Math.abs(realToCanvasMat.a)
+  const fontSize = (text.font_size ?? 1) * scale
   const rotation = text.ccw_rotation ?? 0
+
+  const layout = getAlphabetLayout(content, fontSize)
+  const alignment = mapAnchorAlignment(text.anchor_alignment)
+  const startPos = getTextStartPosition(alignment, layout)
 
   ctx.save()
   ctx.translate(x, y)
@@ -85,10 +94,17 @@ export function drawPcbSilkscreenText(
     ctx.rotate(-rotation * (Math.PI / 180))
   }
 
-  ctx.font = `${fontSize}px sans-serif`
-  ctx.fillStyle = color
-  ctx.textAlign = mapAnchorAlignment(text.anchor_alignment)
-  ctx.fillText(text.text, 0, 0)
+  if (text.layer === "bottom") {
+    ctx.scale(-1, 1)
+  }
+
+  ctx.lineWidth = layout.strokeWidth
+  ctx.lineCap = "round"
+  ctx.lineJoin = "round"
+  ctx.strokeStyle = color
+
+  strokeAlphabetText(ctx, content, layout, startPos.x, startPos.y)
+
   ctx.restore()
 }
 
