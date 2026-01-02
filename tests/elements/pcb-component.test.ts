@@ -24,6 +24,8 @@ test("draw component with smt pads and plated holes", async () => {
     height: 60,
     layer: "top",
     rotation: 0,
+    source_component_id: "component1",
+    obstructs_within_bounds: false,
   }
 
   const smtPad1: PcbSmtPad & { pcb_component_id?: string } = {
@@ -91,6 +93,8 @@ test("draw component with only smt pads", async () => {
     height: 40,
     layer: "top",
     rotation: 0,
+    source_component_id: "component2",
+    obstructs_within_bounds: false,
   }
 
   const smtPad1: PcbSmtPad & { pcb_component_id?: string } = {
@@ -143,6 +147,8 @@ test("draw component with only plated holes", async () => {
     height: 50,
     layer: "top",
     rotation: 0,
+    source_component_id: "component3",
+    obstructs_within_bounds: false,
   }
 
   const platedHole1: PcbPlatedHole & { pcb_component_id?: string } = {
@@ -201,6 +207,8 @@ test("draw component pads are not drawn separately", async () => {
     height: 40,
     layer: "top",
     rotation: 0,
+    source_component_id: "component4",
+    obstructs_within_bounds: false,
   }
 
   const smtPad: PcbSmtPad & { pcb_component_id?: string } = {
