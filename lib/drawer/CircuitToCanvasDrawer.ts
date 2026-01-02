@@ -26,6 +26,7 @@ import type {
   PcbFabricationNoteDimension,
   PcbNoteLine,
   PcbRenderLayer,
+  PcbComponent,
 } from "circuit-json"
 import {
   identity,
@@ -49,6 +50,7 @@ import { drawPcbHole } from "./elements/pcb-hole"
 import { drawPcbSmtPad } from "./elements/pcb-smtpad"
 import { drawPcbTrace } from "./elements/pcb-trace"
 import { drawPcbBoard } from "./elements/pcb-board"
+import { drawPcbComponent } from "./elements/pcb-component"
 import { drawPath } from "./shapes/path"
 import { drawRect } from "./shapes/rect"
 import { drawPcbSilkscreenText } from "./elements/pcb-silkscreen-text"
@@ -186,6 +188,15 @@ export class CircuitToCanvasDrawer {
       ) {
         // Draw board with soldermask fill when pads or holes have soldermask
         this.drawBoardWithSoldermask(element as PcbBoard)
+      } else if (element.type === "pcb_component") {
+        // Draw component with its associated pads
+        drawPcbComponent({
+          ctx: this.ctx,
+          component: element as PcbComponent,
+          allElements: elements,
+          realToCanvasMat: this.realToCanvasMat,
+          colorMap: this.colorMap,
+        })
       } else {
         this.drawElement(element, options)
       }
@@ -285,12 +296,16 @@ export class CircuitToCanvasDrawer {
     }
 
     if (element.type === "pcb_plated_hole") {
-      drawPcbPlatedHole({
-        ctx: this.ctx,
-        hole: element as PcbPlatedHole,
-        realToCanvasMat: this.realToCanvasMat,
-        colorMap: this.colorMap,
-      })
+      const hole = element as PcbPlatedHole & { pcb_component_id?: string }
+      // Skip plated holes that belong to a component (they're drawn with the component)
+      if (!hole.pcb_component_id) {
+        drawPcbPlatedHole({
+          ctx: this.ctx,
+          hole: element as PcbPlatedHole,
+          realToCanvasMat: this.realToCanvasMat,
+          colorMap: this.colorMap,
+        })
+      }
     }
 
     if (element.type === "pcb_via") {
@@ -312,12 +327,16 @@ export class CircuitToCanvasDrawer {
     }
 
     if (element.type === "pcb_smtpad") {
-      drawPcbSmtPad({
-        ctx: this.ctx,
-        pad: element as PcbSmtPad,
-        realToCanvasMat: this.realToCanvasMat,
-        colorMap: this.colorMap,
-      })
+      const pad = element as PcbSmtPad & { pcb_component_id?: string }
+      // Skip pads that belong to a component (they're drawn with the component)
+      if (!pad.pcb_component_id) {
+        drawPcbSmtPad({
+          ctx: this.ctx,
+          pad: element as PcbSmtPad,
+          realToCanvasMat: this.realToCanvasMat,
+          colorMap: this.colorMap,
+        })
+      }
     }
 
     if (element.type === "pcb_trace") {
