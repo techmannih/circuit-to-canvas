@@ -31,6 +31,7 @@ export interface CanvasContext {
   moveTo(x: number, y: number): void
   save(): void
   restore(): void
+  clip(): void
   translate(x: number, y: number): void
   rotate(angle: number): void
   scale(x: number, y: number): void
