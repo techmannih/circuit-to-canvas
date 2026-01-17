@@ -36,11 +36,11 @@ function getSoldermaskColor(layer: string, colorMap: PcbColorMap): string {
 }
 
 function getBorderRadius(pad: PcbSmtPad, margin = 0): number {
-  return (
-    ((pad as { corner_radius?: number }).corner_radius ??
-      (pad as { rect_border_radius?: number }).rect_border_radius ??
-      0) + margin
-  )
+  let r = 0
+  if (pad.shape === "rect" || pad.shape === "rotated_rect") {
+    r = pad.corner_radius ?? pad.rect_border_radius ?? 0
+  }
+  return r + margin
 }
 
 export function drawPcbSmtPad(params: DrawPcbSmtPadParams): void {
@@ -48,25 +48,40 @@ export function drawPcbSmtPad(params: DrawPcbSmtPadParams): void {
 
   const color = layerToColor(pad.layer, colorMap)
   const isCoveredWithSoldermask = pad.is_covered_with_solder_mask === true
-  // If covered with soldermask, fully covered with no margin; otherwise use soldermask_margin if set
   const margin = isCoveredWithSoldermask ? 0 : (pad.soldermask_margin ?? 0)
-  const hasSoldermask =
-    !isCoveredWithSoldermask &&
-    pad.soldermask_margin !== undefined &&
-    pad.soldermask_margin !== 0
+
   const soldermaskRingColor = getSoldermaskColor(pad.layer, colorMap)
   const positiveMarginColor = colorMap.substrate
   const soldermaskOverlayColor = getSoldermaskColor(pad.layer, colorMap)
 
+  const hasSoldermask = !isCoveredWithSoldermask && margin !== 0
+
+  let ml = margin
+  let mr = margin
+  let mt = margin
+  let mb = margin
+  let hasAnySoldermask = hasSoldermask
+
+  if (
+    !isCoveredWithSoldermask &&
+    (pad.shape === "rect" || pad.shape === "rotated_rect")
+  ) {
+    ml = pad.soldermask_margin_left ?? pad.soldermask_margin ?? 0
+    mr = pad.soldermask_margin_right ?? pad.soldermask_margin ?? 0
+    mt = pad.soldermask_margin_top ?? pad.soldermask_margin ?? 0
+    mb = pad.soldermask_margin_bottom ?? pad.soldermask_margin ?? 0
+    hasAnySoldermask = ml !== 0 || mr !== 0 || mt !== 0 || mb !== 0
+  }
+
   // Draw the copper pad
   if (pad.shape === "rect") {
     // For positive margins, draw extended mask area first
-    if (hasSoldermask && margin > 0) {
+    if (hasAnySoldermask && (ml > 0 || mr > 0 || mt > 0 || mb > 0)) {
       drawRect({
         ctx,
-        center: { x: pad.x, y: pad.y },
-        width: pad.width + margin * 2,
-        height: pad.height + margin * 2,
+        center: { x: pad.x + (mr - ml) / 2, y: pad.y + (mt - mb) / 2 },
+        width: pad.width + ml + mr,
+        height: pad.height + mt + mb,
         fill: positiveMarginColor,
         realToCanvasMat,
         borderRadius: getBorderRadius(pad),
@@ -85,23 +100,24 @@ export function drawPcbSmtPad(params: DrawPcbSmtPadParams): void {
     })
 
     // For negative margins, draw soldermask ring on top of the pad
-    if (hasSoldermask && margin < 0) {
+    if (hasAnySoldermask && (ml < 0 || mr < 0 || mt < 0 || mb < 0)) {
       drawSoldermaskRingForRect(
         ctx,
         { x: pad.x, y: pad.y },
         pad.width,
         pad.height,
-        margin,
+        pad.soldermask_margin ?? 0,
         getBorderRadius(pad),
         0,
         realToCanvasMat,
         soldermaskRingColor,
         color,
+        { left: ml, right: mr, top: mt, bottom: mb },
       )
     }
 
-    // If covered with soldermask and margin == 0 (treat as 0 positive margin), draw soldermaskOverCopper overlay
-    if (isCoveredWithSoldermask && margin === 0) {
+    // If covered with soldermask, draw soldermaskOverCopper overlay
+    if (isCoveredWithSoldermask) {
       drawRect({
         ctx,
         center: { x: pad.x, y: pad.y },
@@ -116,13 +132,19 @@ export function drawPcbSmtPad(params: DrawPcbSmtPadParams): void {
   }
 
   if (pad.shape === "rotated_rect") {
+    const radians = ((pad.ccw_rotation ?? 0) * Math.PI) / 180
+    const dxLocal = (mr - ml) / 2
+    const dyLocal = (mt - mb) / 2
+    const dxGlobal = dxLocal * Math.cos(radians) - dyLocal * Math.sin(radians)
+    const dyGlobal = dxLocal * Math.sin(radians) + dyLocal * Math.cos(radians)
+
     // For positive margins, draw extended mask area first
-    if (hasSoldermask && margin > 0) {
+    if (hasAnySoldermask && (ml > 0 || mr > 0 || mt > 0 || mb > 0)) {
       drawRect({
         ctx,
-        center: { x: pad.x, y: pad.y },
-        width: pad.width + margin * 2,
-        height: pad.height + margin * 2,
+        center: { x: pad.x + dxGlobal, y: pad.y + dyGlobal },
+        width: pad.width + ml + mr,
+        height: pad.height + mt + mb,
         fill: positiveMarginColor,
         realToCanvasMat,
         borderRadius: getBorderRadius(pad),
@@ -143,23 +165,24 @@ export function drawPcbSmtPad(params: DrawPcbSmtPadParams): void {
     })
 
     // For negative margins, draw soldermask ring on top of the pad
-    if (hasSoldermask && margin < 0) {
+    if (hasAnySoldermask && (ml < 0 || mr < 0 || mt < 0 || mb < 0)) {
       drawSoldermaskRingForRect(
         ctx,
         { x: pad.x, y: pad.y },
         pad.width,
         pad.height,
-        margin,
+        pad.soldermask_margin ?? 0,
         getBorderRadius(pad),
         pad.ccw_rotation ?? 0,
         realToCanvasMat,
         soldermaskRingColor,
         color,
+        { left: ml, right: mr, top: mt, bottom: mb },
       )
     }
 
-    // If covered with soldermask and margin == 0 (treat as 0 positive margin), draw soldermaskOverCopper overlay
-    if (isCoveredWithSoldermask && margin === 0) {
+    // If covered with soldermask, draw soldermaskOverCopper overlay
+    if (isCoveredWithSoldermask) {
       drawRect({
         ctx,
         center: { x: pad.x, y: pad.y },
